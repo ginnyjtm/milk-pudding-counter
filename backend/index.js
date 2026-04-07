@@ -7,7 +7,7 @@ const { get } = require('http');
 const app = express();
 
 // ============ MIDDLEWARE ============
-app.use
+app.use(cors());
 app.use(express.json());
 
 // ============ CONFIGURATION ============
@@ -90,7 +90,7 @@ const createBackup = async () => {
     //Create timestamped backup filename
     const now = new Date();
     const timestamp = now.toISOString().replace(/[:.]/g, '-').split('.')[0];
-    const backupPath = path.join(BACKUP_DIR, '${getTodayDate()}_${timestamp}.json');
+    const backupPath = path.join(BACKUP_DIR, `${getTodayDate()}_${timestamp}.json`);
 
     const data = await fs.readFile(filepath, 'utf8');
     await fs.writeFile(backupPath, data, 'utf8');
@@ -123,18 +123,137 @@ app.get('/api/today', async (req, res) => {
 });
 
 //Add new order
+app.post('/api/orders', async (req, res) => {
+  try {
+    const data = await getTodayData();
+    // Check if orders are closed for today
+    if (data.status === 'closed') {
+      return res.status(400).json({ error: 'Today\'s orders are closed' });
+    }
+    // Create new order object
+    const newOrder = {
+      id: Date.now(),
+      timestamp: new Date().toISOString(),
+      note: req.body.note || ''
+    };
+    // Add new order to today's data
+    data.orders.push(newOrder);
+    data.expectedCash = data.orders.length * 25;
+   // Save updated data to file
+    await saveTodayData(data);
+  // Create backup after saving
+    res.status(201).json({
+      order: newOrder,
+      totalOrders: data.orders.length,
+      expectedCash: data.expectedCash
+    });
+  } catch (err) {
+    console.error('Error adding order:', err.message);
+    res.status(500).json({ error: 'Failed to add order' });
+  }
+});
 
 //Save Daily Summary
-
+app.post('/api/today/close', async (req, res) => {                                       
+  try {                                                                                  
+    const data = await getTodayData();                                                   
+                                                                                       
+    if (data.status === 'closed') {                                                    
+      return res.status(400).json({ error: 'Today\'s summary is already closed' });                                                                                        
+      }                                                                                    
+                                                                                             
+    await createBackup();                                                         
+                                                                                      
+    data.status = 'closed';                                                       
+    data.closedAt = new Date().toISOString();                                     
+    data.expectedCash = data.orders.length * 25;                                  
+                                                                                      
+    await saveTodayData(data);                                                    
+                                                                                      
+    res.json({                                                                    
+      date: data.date,                                                            
+      totalOrders: data.orders.length,                                            
+      expectedCash: data.expectedCash,                                            
+      closedAt: data.closedAt,                                                    
+      status: data.status                                                         
+    });                                                                           
+    } catch (err) {                                                                 
+      console.error('Error closing daily summary:', err.message);                   
+      res.status(500).json({ error: 'Failed to close daily summary' });             
+    }                                                                               
+});        
 //Get Last 7 Days Summary
+app.get('/api/summary', async (req, res) => {
+  try {
+    const days = [];
+
+    for (let i = 0; i < 7; i++) {
+      const date = new Date();
+      date.setDate(date.getDate() - i);
+      const dateStr = date.toISOString().split('T')[0];
+      const filePath = path.join(DATA_DIR, `${dateStr}.json`);
+
+      try {
+        const raw = await fs.readFile(filePath, 'utf8');
+        const data = JSON.parse(raw);
+        days.push({
+          date: dateStr,
+          totalOrders: data.orders.length,
+          expectedCash: data.orders.length * 25,
+          status: data.status
+        });
+      } catch (err) {
+        if (err.code === 'ENOENT') {
+          days.push({ date: dateStr, totalOrders: 0, expectedCash: 0, status: 'no data' });
+        } else {
+          throw err;
+        }
+      }
+    }
+
+    res.json({ days });
+  } catch (err) {
+    console.error('Error fetching summary:', err.message);
+    res.status(500).json({ error: 'Failed to fetch summary' });
+  }
+});
 
 //List backups
+app.get('/api/backups', async (_req, res) => {
+  try {
+    const files = await fs.readdir(BACKUP_DIR);
+    const backups = files
+      .filter(f => f.endsWith('.json'))
+      .sort()
+      .reverse()
+      .map(f => ({
+        filename: f,
+        date: f.split('_')[0]
+      }));
 
-//Server Health Check
+    res.json({ backups });
+  } catch (err) {
+    console.error('Error listing backups:', err.message);
+    res.status(500).json({ error: 'Failed to list backups' });
+  }
+});
 
+//Server Health Check — also reopens today's orders if closed
+app.get('/', async (_req, res) => {
+  try {
+    const data = await getTodayData();
 
-app.get('/', (req, res) => {
-  res.json({ message: 'Milk Pudding Counter API is running' });
+    if (data.status === 'closed') {
+      data.status = 'open';
+      delete data.closedAt;
+      await saveTodayData(data);
+    }
+
+    res.json({ message: 'Milk Pudding Counter API is running', todayStatus: data.status });
+  } catch (err) {
+    console.error('Error in health check:', err.message);
+    res.status(500).json({ error: 'Health check failed' });
+  }
 });
 
 app.listen(PORT, () => {
