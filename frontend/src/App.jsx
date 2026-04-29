@@ -1,13 +1,16 @@
 import { useState, useEffect } from 'react'
 import './App.css'
 
+const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000'
+
 function App() {
   const [totalOrders, setTotalOrders] = useState(0)
   const [expectedCash, setExpectedCash] = useState(0)
+  const [status, setStatus] = useState('closed')
   const [error, setError] = useState(null)
 
   useEffect(() => {
-    fetch('http://localhost:3000/api/today')
+    fetch(`${API_URL}/api/today`)
       .then(res => res.json())
       .then(data => {
         setTotalOrders(data.totalOrders)
@@ -19,7 +22,7 @@ function App() {
   const addOrder = async () => {
     try {
       setError(null)
-      const res = await fetch('http://localhost:3000/api/orders', {
+      const res = await fetch(`${API_URL}/api/orders`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({})
@@ -33,17 +36,47 @@ function App() {
     }
   }
 
+  const openStore = async () => {
+    try {
+      setError(null)
+      const res = await fetch(`${API_URL}/`)
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error)
+      setStatus(data.todayStatus)
+      setTotalOrders(0)
+      setExpectedCash(0)
+    } catch (err) {
+      setError(err.message)
+    }
+  }
+
+  const closeStore = async () => {
+    try {
+      setError(null)
+      const res = await fetch(`${API_URL}/api/today/close`, {
+        method: 'POST'
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error)
+      setStatus(data.status)
+    } catch (err) {
+      setError(err.message)
+    }
+  }
+
+  const isClosed = status === 'closed'
+
   return (
     <>
       <div id="header">
         <span id="title">Milk Pudding Counter</span>
         <div id="store-actions">
-          <button className="open-store">Open Store</button>
-          <button className="close-store">Close Store</button>
+          <button className="open-store" onClick={openStore} disabled={!isClosed}>Open Store</button>
+          <button className="close-store" onClick={closeStore} disabled={isClosed}>Close Store</button>
         </div>
       </div>
       <div id="center">
-        <button className="counter" onClick={addOrder}>
+        <button className="counter" onClick={addOrder} disabled={isClosed}>
           + Add Order
         </button>
         <div id="summary">
