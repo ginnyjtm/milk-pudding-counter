@@ -43,8 +43,10 @@ function App() {
       const data = await res.json()
       if (!res.ok) throw new Error(data.error)
       setStatus(data.todayStatus)
-      setTotalOrders(0)
-      setExpectedCash(0)
+      const todayRes = await fetch(`${API_URL}/api/today`)
+      const todayData = await todayRes.json()
+      setTotalOrders(todayData.totalOrders)
+      setExpectedCash(todayData.expectedCash)
     } catch (err) {
       setError(err.message)
     }
