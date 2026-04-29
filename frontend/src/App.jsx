@@ -71,25 +71,25 @@ function App() {
   return (
     <>
       <div id="header">
-        <span id="title">Milk Pudding Counter</span>
+        <span id="title">เต้าหู้นมสด</span>
         <div id="store-actions">
-          <button className="open-store" onClick={openStore} disabled={!isClosed}>Open Store</button>
-          <button className="close-store" onClick={closeStore} disabled={isClosed}>Close Store</button>
+          <button className="open-store" onClick={openStore} disabled={!isClosed}>เปิดร้าน</button>
+          <button className="close-store" onClick={closeStore} disabled={isClosed}>ปิดร้าน</button>
         </div>
       </div>
       <div id="center">
         <button className="counter" onClick={addOrder} disabled={isClosed}>
-          + Add Order
+          + เพิ่มออร์เดอร์
         </button>
         <div id="summary">
           <div className="summary-item">
             <span className="summary-value">{totalOrders}</span>
-            <span className="summary-label">Orders Today</span>
+            <span className="summary-label">ขายไปทั้งหมด(ถุง)</span>
           </div>
           <div className="summary-divider" />
           <div className="summary-item">
             <span className="summary-value">฿{expectedCash}</span>
-            <span className="summary-label">Expected Cash</span>
+            <span className="summary-label">เงินที่คาดหวัง (บาท)</span>
           </div>
         </div>
         {error && <p className="error">{error}</p>}
