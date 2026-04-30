@@ -1,6 +1,7 @@
 require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
+const https = require('https');
 const { Firestore } = require('@google-cloud/firestore');
 
 const app = express();
@@ -11,6 +12,8 @@ app.use(express.json());
 
 // ============ CONFIGURATION ============
 const PORT = process.env.PORT || 3000;
+const LINE_TOKEN = process.env.LINE_CHANNEL_ACCESS_TOKEN;
+const LINE_GROUP_ID = process.env.LINE_GROUP_ID;
 
 // ============ FIRESTORE CLIENT ============
 const getFirestore = () => {
@@ -18,6 +21,33 @@ const getFirestore = () => {
   return new Firestore({
     projectId: credentials.project_id,
     credentials
+  });
+};
+
+// ============ LINE NOTIFICATION ============
+const sendLineMessage = (message) => {
+  return new Promise((resolve, reject) => {
+    const body = JSON.stringify({
+      to: LINE_GROUP_ID,
+      messages: [{ type: 'text', text: message }]
+    });
+
+    const req = https.request({
+      hostname: 'api.line.me',
+      path: '/v2/bot/message/push',
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${LINE_TOKEN}`
+      }
+    }, (res) => {
+      res.on('data', () => {});
+      res.on('end', resolve);
+    });
+
+    req.on('error', reject);
+    req.write(body);
+    req.end();
   });
 };
 
@@ -131,6 +161,10 @@ app.post('/api/today/close', async (req, res) => {
     data.expectedCash = data.orders.length * 25;
 
     await saveTodayData(db, data, store);
+
+    const storeName = store === 'store1' ? 'ร้านตาเสก' : 'ร้านเจ๊ต่าย';
+    const message = `🧾 สรุปยอดขายประจำวัน\n📅 วันที่: ${data.date}\n🏪 สาขา: ${storeName}\n📦 ขายได้: ${data.orders.length} ถุง\n💰 ยอดเงิน: ฿${data.expectedCash}`;
+    sendLineMessage(message).catch(err => console.error('LINE notify failed:', err.message));
 
     res.json({
       date: data.date,
