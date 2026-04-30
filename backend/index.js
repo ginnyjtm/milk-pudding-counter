@@ -1,3 +1,4 @@
+require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
 const { Firestore } = require('@google-cloud/firestore');
@@ -25,26 +26,28 @@ const getTodayDate = () => {
   return new Date().toISOString().split('T')[0];
 };
 
+const getDocId = (store) => `${getTodayDate()}-${store}`;
+
 // Get today's data from Firestore (or return empty structure)
-const getTodayData = async (db) => {
-  const doc = await db.collection('orders').doc(getTodayDate()).get();
+const getTodayData = async (db, store) => {
+  const doc = await db.collection('orders').doc(getDocId(store)).get();
   if (!doc.exists) {
-    return { date: getTodayDate(), orders: [], expectedCash: 0, status: 'open' };
+    return { date: getTodayDate(), store, orders: [], expectedCash: 0, status: 'open' };
   }
   return doc.data();
 };
 
 // Save today's data to Firestore
-const saveTodayData = async (db, data) => {
-  await db.collection('orders').doc(getTodayDate()).set(data);
+const saveTodayData = async (db, data, store) => {
+  await db.collection('orders').doc(getDocId(store)).set(data);
 };
 
 // Create a backup in Firestore
-const createBackup = async (db) => {
-  const data = await getTodayData(db);
+const createBackup = async (db, store) => {
+  const data = await getTodayData(db, store);
   const now = new Date();
   const timeOnly = now.toISOString().split('T')[1].replace(/[:.]/g, '-').split('-').slice(0, 3).join('-');
-  const backupId = `${getTodayDate()}_${timeOnly}`;
+  const backupId = `${getDocId(store)}_${timeOnly}`;
   await db.collection('backups').doc(backupId).set(data);
   console.log(`Backup created: ${backupId}`);
 };
@@ -54,13 +57,16 @@ const createBackup = async (db) => {
 // Get today's order and expected cash summary
 app.get('/api/today', async (req, res) => {
   try {
+    const store = req.query.store;
+    if (!store) return res.status(400).json({ error: 'Missing store parameter' });
     const db = getFirestore();
-    const data = await getTodayData(db);
+    const data = await getTodayData(db, store);
     const totalOrders = data.orders.length;
     const totalCash = totalOrders * 25;
 
     res.json({
       date: data.date,
+      store: data.store,
       totalOrders,
       expectedCash: totalCash,
       status: data.status,
@@ -75,8 +81,10 @@ app.get('/api/today', async (req, res) => {
 // Add new order
 app.post('/api/orders', async (req, res) => {
   try {
+    const store = req.query.store;
+    if (!store) return res.status(400).json({ error: 'Missing store parameter' });
     const db = getFirestore();
-    const data = await getTodayData(db);
+    const data = await getTodayData(db, store);
 
     if (data.status === 'closed') {
       return res.status(400).json({ error: 'Today\'s orders are closed' });
@@ -91,7 +99,7 @@ app.post('/api/orders', async (req, res) => {
     data.orders.push(newOrder);
     data.expectedCash = data.orders.length * 25;
 
-    await saveTodayData(db, data);
+    await saveTodayData(db, data, store);
 
     res.status(201).json({
       order: newOrder,
@@ -107,20 +115,22 @@ app.post('/api/orders', async (req, res) => {
 // Close daily orders and save summary
 app.post('/api/today/close', async (req, res) => {
   try {
+    const store = req.query.store;
+    if (!store) return res.status(400).json({ error: 'Missing store parameter' });
     const db = getFirestore();
-    const data = await getTodayData(db);
+    const data = await getTodayData(db, store);
 
     if (data.status === 'closed') {
       return res.status(400).json({ error: 'Today\'s summary is already closed' });
     }
 
-    await createBackup(db);
+    await createBackup(db, store);
 
     data.status = 'closed';
     data.closedAt = new Date().toISOString();
     data.expectedCash = data.orders.length * 25;
 
-    await saveTodayData(db, data);
+    await saveTodayData(db, data, store);
 
     res.json({
       date: data.date,
@@ -138,6 +148,8 @@ app.post('/api/today/close', async (req, res) => {
 // Get last 7 days summary
 app.get('/api/summary', async (req, res) => {
   try {
+    const store = req.query.store;
+    if (!store) return res.status(400).json({ error: 'Missing store parameter' });
     const db = getFirestore();
     const days = [];
 
@@ -145,7 +157,7 @@ app.get('/api/summary', async (req, res) => {
       const date = new Date();
       date.setDate(date.getDate() - i);
       const dateStr = date.toISOString().split('T')[0];
-      const doc = await db.collection('orders').doc(dateStr).get();
+      const doc = await db.collection('orders').doc(`${dateStr}-${store}`).get();
 
       if (doc.exists) {
         const data = doc.data();
@@ -188,13 +200,15 @@ app.get('/api/backups', async (req, res) => {
 // Health check — also reopens today's orders if closed
 app.get('/', async (req, res) => {
   try {
+    const store = req.query.store;
+    if (!store) return res.json({ message: 'Milk Pudding Counter API is running' });
     const db = getFirestore();
-    const data = await getTodayData(db);
+    const data = await getTodayData(db, store);
 
     if (data.status === 'closed') {
       data.status = 'open';
       delete data.closedAt;
-      await saveTodayData(db, data);
+      await saveTodayData(db, data, store);
     }
 
     res.json({ message: 'Milk Pudding Counter API is running', todayStatus: data.status });
