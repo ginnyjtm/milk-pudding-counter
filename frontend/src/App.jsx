@@ -48,6 +48,10 @@ function App() {
   const handleSelectStore = (selected) => {
     localStorage.setItem('selectedStore', JSON.stringify(selected))
     setStore(selected)
+    setStatus('closed')
+    setTotalOrders(0)
+    setExpectedCash(0)
+    setError(null)
   }
 
   const addOrder = async () => {
