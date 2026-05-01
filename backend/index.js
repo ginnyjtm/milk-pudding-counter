@@ -92,7 +92,7 @@ app.get('/api/today', async (req, res) => {
     const db = getFirestore();
     const data = await getTodayData(db, store);
     const totalOrders = data.orders.length;
-    const totalCash = totalOrders * 25;
+    const totalCash = totalOrders * 20;
 
     res.json({
       date: data.date,
@@ -127,7 +127,7 @@ app.post('/api/orders', async (req, res) => {
     };
 
     data.orders.push(newOrder);
-    data.expectedCash = data.orders.length * 25;
+    data.expectedCash = data.orders.length * 20;
 
     await saveTodayData(db, data, store);
 
@@ -158,7 +158,7 @@ app.post('/api/today/close', async (req, res) => {
 
     data.status = 'closed';
     data.closedAt = new Date().toISOString();
-    data.expectedCash = data.orders.length * 25;
+    data.expectedCash = data.orders.length * 20;
 
     await saveTodayData(db, data, store);
 
@@ -198,7 +198,7 @@ app.get('/api/summary', async (req, res) => {
         days.push({
           date: dateStr,
           totalOrders: data.orders.length,
-          expectedCash: data.orders.length * 25,
+          expectedCash: data.orders.length * 20,
           status: data.status
         });
       } else {
