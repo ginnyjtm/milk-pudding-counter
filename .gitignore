@@ -29,3 +29,9 @@ yarn-error.log*
 *.sw?
 data/
 backups/
+
+# Firestore export scripts and data (personal use only)
+export.sh
+export_firestore.py
+firestore_export.csv
+firestore_export.json
